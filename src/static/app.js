@@ -1060,10 +1060,17 @@ document.addEventListener("DOMContentLoaded", () => {
       async () => {
         try {
           const response = await fetch(
-            `/announcements/${encodeURIComponent(id)}?teacher_username=${encodeURIComponent(
-              currentUser.username
-            )}&teacher_password=${encodeURIComponent(password)}`,
-            { method: "DELETE" }
+            `/announcements/${encodeURIComponent(id)}`,
+            {
+              method: "DELETE",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                teacher_username: currentUser.username,
+                teacher_password: password,
+              }),
+            }
           );
 
           if (response.ok) {
