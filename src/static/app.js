@@ -990,34 +990,70 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Render the list of announcements in the management modal
   function renderAnnouncementList(announcements) {
+    // Clear existing content
+    while (announcementListContainer.firstChild) {
+      announcementListContainer.removeChild(announcementListContainer.firstChild);
+    }
+
     if (announcements.length === 0) {
-      announcementListContainer.innerHTML =
-        "<p style='color:var(--text-secondary);font-size:0.85rem'>No announcements yet.</p>";
+      const emptyMessage = document.createElement("p");
+      emptyMessage.style.color = "var(--text-secondary)";
+      emptyMessage.style.fontSize = "0.85rem";
+      emptyMessage.textContent = "No announcements yet.";
+      announcementListContainer.appendChild(emptyMessage);
       return;
     }
 
-    announcementListContainer.innerHTML = announcements
-      .map(
-        (a) => `
-      <div class="announcement-list-item"
-           data-id="${a.id}"
-           data-message="${a.message.replace(/"/g, '&quot;')}"
-           data-starts-on="${a.starts_on || ""}"
-           data-expires-on="${a.expires_on}">
-        <div class="announcement-list-item-text">
-          <div>${a.message}</div>
-          <div class="announcement-list-item-dates">
-            ${a.starts_on ? `Starts: ${a.starts_on} · ` : ""}Expires: ${a.expires_on}
-          </div>
-        </div>
-        <div class="announcement-list-item-actions">
-          <button type="button" class="announcement-edit-btn" data-id="${a.id}">Edit</button>
-          <button type="button" class="announcement-delete-btn" data-id="${a.id}">Delete</button>
-        </div>
-      </div>`
-      )
-      .join("");
+    announcements.forEach((a) => {
+      const item = document.createElement("div");
+      item.className = "announcement-list-item";
+      item.setAttribute("data-id", a.id);
+      // Store message safely via DOM APIs (no HTML parsing)
+      item.setAttribute("data-message", a.message);
+      item.setAttribute("data-starts-on", a.starts_on || "");
+      item.setAttribute("data-expires-on", a.expires_on);
 
+      const textWrapper = document.createElement("div");
+      textWrapper.className = "announcement-list-item-text";
+
+      const messageEl = document.createElement("div");
+      messageEl.textContent = a.message;
+
+      const datesEl = document.createElement("div");
+      datesEl.className = "announcement-list-item-dates";
+      let datesText = "";
+      if (a.starts_on) {
+        datesText += `Starts: ${a.starts_on} · `;
+      }
+      datesText += `Expires: ${a.expires_on}`;
+      datesEl.textContent = datesText;
+
+      textWrapper.appendChild(messageEl);
+      textWrapper.appendChild(datesEl);
+
+      const actionsWrapper = document.createElement("div");
+      actionsWrapper.className = "announcement-list-item-actions";
+
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "announcement-edit-btn";
+      editBtn.setAttribute("data-id", a.id);
+      editBtn.textContent = "Edit";
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "announcement-delete-btn";
+      deleteBtn.setAttribute("data-id", a.id);
+      deleteBtn.textContent = "Delete";
+
+      actionsWrapper.appendChild(editBtn);
+      actionsWrapper.appendChild(deleteBtn);
+
+      item.appendChild(textWrapper);
+      item.appendChild(actionsWrapper);
+
+      announcementListContainer.appendChild(item);
+    });
     announcementListContainer
       .querySelectorAll(".announcement-edit-btn")
       .forEach((btn) => btn.addEventListener("click", handleEditAnnouncement));
