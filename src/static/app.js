@@ -25,6 +25,21 @@ document.addEventListener("DOMContentLoaded", () => {
   const closeLoginModal = document.querySelector(".close-login-modal");
   const loginMessage = document.getElementById("login-message");
 
+  // Announcement elements
+  const announcementBanner = document.getElementById("announcement-banner");
+  const announcementItems = document.getElementById("announcement-items");
+  const manageAnnouncementsButton = document.getElementById("manage-announcements-button");
+  const announcementsModal = document.getElementById("announcements-modal");
+  const closeAnnouncementsModalBtn = document.querySelector(".close-announcements-modal");
+  const announcementForm = document.getElementById("announcement-form");
+  const announcementIdInput = document.getElementById("announcement-id");
+  const announcementMessageInput = document.getElementById("announcement-message");
+  const announcementStartsOnInput = document.getElementById("announcement-starts-on");
+  const announcementExpiresOnInput = document.getElementById("announcement-expires-on");
+  const announcementResetButton = document.getElementById("announcement-reset-button");
+  const announcementMessageBox = document.getElementById("announcement-message-box");
+  const announcementListContainer = document.getElementById("announcement-list");
+
   // Activity categories with corresponding colors
   const activityTypes = {
     sports: { label: "Sports", color: "#e8f5e9", textColor: "#2e7d32" },
@@ -43,6 +58,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Authentication state
   let currentUser = null;
+  // Session password kept only in memory (not persisted to storage)
+  let sessionPassword = null;
 
   // Time range mappings for the dropdown
   const timeRanges = {
@@ -146,10 +163,12 @@ document.addEventListener("DOMContentLoaded", () => {
       loginButton.classList.add("hidden");
       userInfo.classList.remove("hidden");
       displayName.textContent = currentUser.display_name;
+      manageAnnouncementsButton.classList.remove("hidden");
     } else {
       loginButton.classList.remove("hidden");
       userInfo.classList.add("hidden");
       displayName.textContent = "";
+      manageAnnouncementsButton.classList.add("hidden");
     }
 
     updateAuthBodyClass();
@@ -191,6 +210,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Login successful
       currentUser = data;
       localStorage.setItem("currentUser", JSON.stringify(data));
+      sessionPassword = password;
       updateAuthUI();
       closeLoginModalHandler();
       showMessage(`Welcome, ${currentUser.display_name}!`, "success");
@@ -205,6 +225,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Logout function
   function logout() {
     currentUser = null;
+    sessionPassword = null;
     localStorage.removeItem("currentUser");
     updateAuthUI();
     showMessage("You have been logged out.", "info");
@@ -861,8 +882,285 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeRangeFilter,
   };
 
+  // ─── Announcements ───────────────────────────────────────────────────────────
+
+  // Fetch and display active announcements in the banner
+  async function fetchActiveAnnouncements() {
+    try {
+      const response = await fetch("/announcements");
+      if (!response.ok) return;
+
+      const announcements = await response.json();
+
+      if (announcements.length > 0) {
+        announcementItems.innerHTML = announcements
+          .map(
+            (a) => `<p class="announcement-item">${a.message}</p>`
+          )
+          .join("");
+        announcementBanner.classList.remove("hidden");
+      } else {
+        announcementBanner.classList.add("hidden");
+      }
+    } catch (error) {
+      console.error("Error fetching announcements:", error);
+    }
+  }
+
+  // Open announcements management modal
+  function openAnnouncementsModal() {
+    announcementsModal.classList.remove("hidden");
+    setTimeout(() => announcementsModal.classList.add("show"), 10);
+    announcementMessageBox.classList.add("hidden");
+    loadAnnouncementsForManagement();
+  }
+
+  // Close announcements management modal
+  function closeAnnouncementsModalHandler() {
+    announcementsModal.classList.remove("show");
+    setTimeout(() => {
+      announcementsModal.classList.add("hidden");
+      resetAnnouncementForm();
+    }, 300);
+  }
+
+  // Reset the announcement form to its initial (create) state
+  function resetAnnouncementForm() {
+    announcementForm.reset();
+    announcementIdInput.value = "";
+    const submitBtn = document.getElementById("announcement-submit-button");
+    if (submitBtn) submitBtn.textContent = "Save Announcement";
+    announcementMessageBox.classList.add("hidden");
+  }
+
+  // Show a message inside the announcements modal
+  function showAnnouncementMessage(text, type) {
+    announcementMessageBox.textContent = text;
+    announcementMessageBox.className = `message ${type}`;
+    announcementMessageBox.classList.remove("hidden");
+    setTimeout(() => announcementMessageBox.classList.add("hidden"), 5000);
+  }
+
+  // Load all announcements for the management list
+  async function loadAnnouncementsForManagement() {
+    if (!currentUser) return;
+
+    const password = sessionPassword;
+    if (!password) {
+      showAnnouncementMessage(
+        "Session expired. Please log out and log in again to manage announcements.",
+        "error"
+      );
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/announcements/manage?teacher_username=${encodeURIComponent(
+          currentUser.username
+        )}&teacher_password=${encodeURIComponent(password)}`
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        showAnnouncementMessage(
+          data.detail || "Failed to load announcements.",
+          "error"
+        );
+        return;
+      }
+
+      const announcements = await response.json();
+      renderAnnouncementList(announcements);
+    } catch (error) {
+      console.error("Error loading announcements:", error);
+      showAnnouncementMessage("Failed to load announcements.", "error");
+    }
+  }
+
+  // Render the list of announcements in the management modal
+  function renderAnnouncementList(announcements) {
+    if (announcements.length === 0) {
+      announcementListContainer.innerHTML =
+        "<p style='color:var(--text-secondary);font-size:0.85rem'>No announcements yet.</p>";
+      return;
+    }
+
+    announcementListContainer.innerHTML = announcements
+      .map(
+        (a) => `
+      <div class="announcement-list-item"
+           data-id="${a.id}"
+           data-message="${a.message.replace(/"/g, '&quot;')}"
+           data-starts-on="${a.starts_on || ""}"
+           data-expires-on="${a.expires_on}">
+        <div class="announcement-list-item-text">
+          <div>${a.message}</div>
+          <div class="announcement-list-item-dates">
+            ${a.starts_on ? `Starts: ${a.starts_on} · ` : ""}Expires: ${a.expires_on}
+          </div>
+        </div>
+        <div class="announcement-list-item-actions">
+          <button type="button" class="announcement-edit-btn" data-id="${a.id}">Edit</button>
+          <button type="button" class="announcement-delete-btn" data-id="${a.id}">Delete</button>
+        </div>
+      </div>`
+      )
+      .join("");
+
+    announcementListContainer
+      .querySelectorAll(".announcement-edit-btn")
+      .forEach((btn) => btn.addEventListener("click", handleEditAnnouncement));
+
+    announcementListContainer
+      .querySelectorAll(".announcement-delete-btn")
+      .forEach((btn) =>
+        btn.addEventListener("click", handleDeleteAnnouncement)
+      );
+  }
+
+  // Populate form for editing an existing announcement
+  function handleEditAnnouncement(event) {
+    const id = event.target.dataset.id;
+    const item = announcementListContainer.querySelector(
+      `.announcement-list-item[data-id="${id}"]`
+    );
+    if (!item) return;
+
+    announcementIdInput.value = id;
+    announcementMessageInput.value = item.dataset.message;
+    announcementExpiresOnInput.value = item.dataset.expiresOn;
+    announcementStartsOnInput.value = item.dataset.startsOn;
+
+    const submitBtn = document.getElementById("announcement-submit-button");
+    if (submitBtn) submitBtn.textContent = "Update Announcement";
+
+    announcementMessageInput.focus();
+  }
+
+  // Handle deleting an announcement
+  async function handleDeleteAnnouncement(event) {
+    const id = event.target.dataset.id;
+    const password = sessionPassword;
+    if (!password) {
+      showAnnouncementMessage(
+        "Session expired. Please log out and log in again.",
+        "error"
+      );
+      return;
+    }
+
+    showConfirmationDialog(
+      "Are you sure you want to delete this announcement?",
+      async () => {
+        try {
+          const response = await fetch(
+            `/announcements/${encodeURIComponent(id)}?teacher_username=${encodeURIComponent(
+              currentUser.username
+            )}&teacher_password=${encodeURIComponent(password)}`,
+            { method: "DELETE" }
+          );
+
+          if (response.ok) {
+            showAnnouncementMessage("Announcement deleted.", "success");
+            loadAnnouncementsForManagement();
+            fetchActiveAnnouncements();
+          } else {
+            const data = await response.json();
+            showAnnouncementMessage(data.detail || "Delete failed.", "error");
+          }
+        } catch (error) {
+          console.error("Error deleting announcement:", error);
+          showAnnouncementMessage("Delete failed. Please try again.", "error");
+        }
+      }
+    );
+  }
+
+  // Handle announcement form submission (create or update)
+  announcementForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    if (!currentUser) return;
+
+    const password = sessionPassword;
+    if (!password) {
+      showAnnouncementMessage(
+        "Session expired. Please log out and log in again.",
+        "error"
+      );
+      return;
+    }
+
+    const id = announcementIdInput.value.trim();
+    const message = announcementMessageInput.value.trim();
+    const expiresOn = announcementExpiresOnInput.value;
+    const startsOn = announcementStartsOnInput.value;
+
+    const authParams = `teacher_username=${encodeURIComponent(
+      currentUser.username
+    )}&teacher_password=${encodeURIComponent(password)}`;
+    const dateParams = `expires_on=${encodeURIComponent(expiresOn)}${
+      startsOn ? `&starts_on=${encodeURIComponent(startsOn)}` : ""
+    }`;
+
+    try {
+      let response;
+      if (id) {
+        response = await fetch(
+          `/announcements/${encodeURIComponent(
+            id
+          )}?message=${encodeURIComponent(message)}&${dateParams}&${authParams}`,
+          { method: "PUT" }
+        );
+      } else {
+        response = await fetch(
+          `/announcements?message=${encodeURIComponent(
+            message
+          )}&${dateParams}&${authParams}`,
+          { method: "POST" }
+        );
+      }
+
+      if (response.ok) {
+        showAnnouncementMessage(
+          id ? "Announcement updated." : "Announcement created.",
+          "success"
+        );
+        resetAnnouncementForm();
+        loadAnnouncementsForManagement();
+        fetchActiveAnnouncements();
+      } else {
+        const data = await response.json();
+        showAnnouncementMessage(data.detail || "Failed to save announcement.", "error");
+      }
+    } catch (error) {
+      console.error("Error saving announcement:", error);
+      showAnnouncementMessage("Failed to save. Please try again.", "error");
+    }
+  });
+
+  // Reset form button handler
+  announcementResetButton.addEventListener("click", resetAnnouncementForm);
+
+  // Open modal when manage-announcements button is clicked
+  manageAnnouncementsButton.addEventListener("click", openAnnouncementsModal);
+
+  // Close modal on close button
+  closeAnnouncementsModalBtn.addEventListener("click", closeAnnouncementsModalHandler);
+
+  // Close modal when clicking outside
+  window.addEventListener("click", (event) => {
+    if (event.target === announcementsModal) {
+      closeAnnouncementsModalHandler();
+    }
+  });
+
+  // ─── End Announcements ───────────────────────────────────────────────────────
+
   // Initialize app
   checkAuthentication();
   initializeFilters();
   fetchActivities();
+  fetchActiveAnnouncements();
 });

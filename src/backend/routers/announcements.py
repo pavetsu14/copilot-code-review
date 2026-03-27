@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query
 
-from ..database import announcements_collection, teachers_collection
+from ..database import announcements_collection, teachers_collection, verify_password
 
 router = APIRouter(
     prefix="/announcements",
@@ -31,12 +31,12 @@ def _parse_date(value: Optional[str], field_name: str, required: bool = False) -
         ) from exc
 
 
-def _validate_teacher(teacher_username: Optional[str]) -> Dict[str, Any]:
-    if not teacher_username:
+def _validate_teacher(teacher_username: Optional[str], teacher_password: Optional[str]) -> Dict[str, Any]:
+    if not teacher_username or not teacher_password:
         raise HTTPException(status_code=401, detail="Authentication required for this action")
 
     teacher = teachers_collection.find_one({"_id": teacher_username})
-    if not teacher:
+    if not teacher or not verify_password(teacher.get("password", ""), teacher_password):
         raise HTTPException(status_code=401, detail="Invalid teacher credentials")
 
     return teacher
@@ -82,9 +82,12 @@ def get_active_announcements() -> List[Dict[str, Any]]:
 
 
 @router.get("/manage", response_model=List[Dict[str, Any]])
-def get_all_announcements(teacher_username: Optional[str] = Query(None)) -> List[Dict[str, Any]]:
+def get_all_announcements(
+    teacher_username: Optional[str] = Query(None),
+    teacher_password: Optional[str] = Query(None)
+) -> List[Dict[str, Any]]:
     """Get all announcements for management dashboard - requires teacher authentication."""
-    _validate_teacher(teacher_username)
+    _validate_teacher(teacher_username, teacher_password)
 
     announcements: List[Dict[str, Any]] = []
     for item in announcements_collection.find().sort([("expires_on", 1), ("starts_on", 1)]):
@@ -103,10 +106,11 @@ def create_announcement(
     message: str,
     expires_on: str,
     starts_on: Optional[str] = None,
-    teacher_username: Optional[str] = Query(None)
+    teacher_username: Optional[str] = Query(None),
+    teacher_password: Optional[str] = Query(None)
 ) -> Dict[str, Any]:
     """Create a new announcement - requires teacher authentication."""
-    _validate_teacher(teacher_username)
+    _validate_teacher(teacher_username, teacher_password)
 
     if not message.strip():
         raise HTTPException(status_code=400, detail="message is required")
@@ -138,10 +142,11 @@ def update_announcement(
     message: str,
     expires_on: str,
     starts_on: Optional[str] = None,
-    teacher_username: Optional[str] = Query(None)
+    teacher_username: Optional[str] = Query(None),
+    teacher_password: Optional[str] = Query(None)
 ) -> Dict[str, Any]:
     """Update an existing announcement - requires teacher authentication."""
-    _validate_teacher(teacher_username)
+    _validate_teacher(teacher_username, teacher_password)
 
     if not message.strip():
         raise HTTPException(status_code=400, detail="message is required")
@@ -170,9 +175,13 @@ def update_announcement(
 
 
 @router.delete("/{announcement_id}", response_model=Dict[str, str])
-def delete_announcement(announcement_id: str, teacher_username: Optional[str] = Query(None)) -> Dict[str, str]:
+def delete_announcement(
+    announcement_id: str,
+    teacher_username: Optional[str] = Query(None),
+    teacher_password: Optional[str] = Query(None)
+) -> Dict[str, str]:
     """Delete an announcement - requires teacher authentication."""
-    _validate_teacher(teacher_username)
+    _validate_teacher(teacher_username, teacher_password)
 
     result = announcements_collection.delete_one({"_id": announcement_id})
     if result.deleted_count == 0:
