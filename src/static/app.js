@@ -893,11 +893,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const announcements = await response.json();
 
       if (announcements.length > 0) {
-        announcementItems.innerHTML = announcements
-          .map(
-            (a) => `<p class="announcement-item">${a.message}</p>`
-          )
-          .join("");
+        // Clear existing announcements safely
+        announcementItems.innerHTML = "";
+
+        // Create announcement elements using textContent to avoid XSS
+        announcements.forEach((a) => {
+          const item = document.createElement("p");
+          item.classList.add("announcement-item");
+          item.textContent = a.message != null ? String(a.message) : "";
+          announcementItems.appendChild(item);
+        });
         announcementBanner.classList.remove("hidden");
       } else {
         announcementBanner.classList.add("hidden");
