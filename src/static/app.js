@@ -955,11 +955,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      const response = await fetch(
-        `/announcements/manage?teacher_username=${encodeURIComponent(
-          currentUser.username
-        )}&teacher_password=${encodeURIComponent(password)}`
-      );
+      const response = await fetch("/announcements/manage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          teacher_username: currentUser.username,
+          teacher_password: password,
+        }),
+      });
 
       if (!response.ok) {
         const data = await response.json();
