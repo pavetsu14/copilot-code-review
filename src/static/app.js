@@ -1109,28 +1109,38 @@ document.addEventListener("DOMContentLoaded", () => {
     const expiresOn = announcementExpiresOnInput.value;
     const startsOn = announcementStartsOnInput.value;
 
-    const authParams = `teacher_username=${encodeURIComponent(
-      currentUser.username
-    )}&teacher_password=${encodeURIComponent(password)}`;
-    const dateParams = `expires_on=${encodeURIComponent(expiresOn)}${
-      startsOn ? `&starts_on=${encodeURIComponent(startsOn)}` : ""
-    }`;
+    const payload = {
+      message,
+      expires_on: expiresOn,
+      // Only include starts_on if provided to avoid sending empty values
+      ...(startsOn ? { starts_on: startsOn } : {}),
+      teacher_username: currentUser.username,
+      teacher_password: password,
+    };
 
     try {
       let response;
       if (id) {
         response = await fetch(
-          `/announcements/${encodeURIComponent(
-            id
-          )}?message=${encodeURIComponent(message)}&${dateParams}&${authParams}`,
-          { method: "PUT" }
+          `/announcements/${encodeURIComponent(id)}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          }
         );
       } else {
         response = await fetch(
-          `/announcements?message=${encodeURIComponent(
-            message
-          )}&${dateParams}&${authParams}`,
-          { method: "POST" }
+          `/announcements`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          }
         );
       }
 
