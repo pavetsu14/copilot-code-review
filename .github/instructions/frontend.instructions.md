@@ -1,5 +1,5 @@
 ---
-applyTo: "*.html,*.css,*.js"
+applyTo: "**/*.html,**/*.css,**/*.js"
 ---
 
 ## Frontend Guidelines
